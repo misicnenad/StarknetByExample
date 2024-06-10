@@ -58,6 +58,9 @@ Summary
 - [Constant Product AMM](./applications/constant-product-amm.md)
 - [TimeLock](./applications/timelock.md)
 - [Staking](./applications/staking.md)
+- [Crowdfunding](./applications/crowdfunding/crowdfunding.md)
+  - [Campaign Contract](./applications/crowdfunding/campaign.md)
+  - [CampaignFactory Contract](./applications/crowdfunding/factory.md)
 
 <!-- advanced-concepts -->
 
