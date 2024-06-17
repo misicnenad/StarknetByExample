@@ -58,6 +58,7 @@ version = "0.1.0"
 name = "crowdfunding"
 version = "0.1.0"
 dependencies = [
+ "alexandria_storage",
  "components",
  "openzeppelin",
  "snforge_std",
