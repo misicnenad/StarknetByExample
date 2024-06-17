@@ -182,6 +182,30 @@ mod tests {
     }
 
     #[test]
+    fn test_add_1000_pledgers() {
+        let mut pledgeable: TestingState = Default::default();
+
+        // set up 1000 pledgers
+        let mut pledgers: Array::<(ContractAddress, u256)> = array![];
+        let mut i: felt252 = 1000;
+        while i != 0 {
+            let pledger: ContractAddress = i.try_into().unwrap();
+            let amount: u256 = i.into() * 100;
+            pledgeable.add(pledger, amount);
+            pledgers.append((pledger, amount));
+            i -= 1;
+        };
+
+        assert_eq!(pledgers.len(), pledgeable.get_pledger_count());
+
+        while let Option::Some((pledger, expected_amount)) = pledgers
+            .pop_front() {
+                let amount = pledgeable.get(pledger);
+                assert_eq!(amount, expected_amount);
+            }
+    }
+
+    #[test]
     fn test_remove() {
         let mut pledgeable: TestingState = Default::default();
         let pledger_1 = contract_address_const::<'pledger_1'>();
@@ -368,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_pledgers_as_arr_many_pledgers() {
+    fn test_get_pledgers_as_arr_1000_pledgers() {
         let mut pledgeable: TestingState = Default::default();
 
         // set up 1000 pledgers
