@@ -6,7 +6,7 @@ pub trait IPledgeable<TContractState> {
     fn add(ref self: TContractState, pledger: ContractAddress, amount: u256);
     fn get(self: @TContractState, pledger: ContractAddress) -> u256;
     fn get_pledger_count(self: @TContractState) -> u32;
-    fn get_pledges_as_arr(self: @TContractState) -> Array<ContractAddress>;
+    fn get_pledgers_as_arr(self: @TContractState) -> Array<ContractAddress>;
     fn get_total(self: @TContractState) -> u256;
     fn remove(ref self: TContractState, pledger: ContractAddress) -> u256;
 }
@@ -58,7 +58,7 @@ pub mod pledgeable_component {
             self.pledgers.read().len()
         }
 
-        fn get_pledges_as_arr(self: @ComponentState<TContractState>) -> Array<ContractAddress> {
+        fn get_pledgers_as_arr(self: @ComponentState<TContractState>) -> Array<ContractAddress> {
             let pledgers = self.pledgers.read();
             pledgers.array().unwrap()
         }
@@ -133,7 +133,7 @@ mod tests {
 
     use super::{pledgeable_component, IPledgeableDispatcher, IPledgeableDispatcherTrait};
     use super::pledgeable_component::{PledgeableImpl};
-    use starknet::{contract_address_const};
+    use starknet::{ContractAddress, contract_address_const};
 
     type TestingState = pledgeable_component::ComponentState<MockContract::ContractState>;
 
@@ -227,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_pledges_as_arr() {
+    fn test_get_pledgers_as_arr() {
         let mut pledgeable: TestingState = Default::default();
         let pledger_1 = contract_address_const::<'pledger_1'>();
         let pledger_2 = contract_address_const::<'pledger_2'>();
@@ -239,15 +239,43 @@ mod tests {
         // 2nd pledge by pledger_2 *should not* increase the pledge count
         pledgeable.add(pledger_2, 1500);
 
-        let pledges_arr = pledgeable.get_pledges_as_arr();
+        let pledgers_arr = pledgeable.get_pledgers_as_arr();
 
-        assert_eq!(pledges_arr.len(), 3);
-        assert_eq!(pledger_1, *pledges_arr[0]);
-        assert_eq!(1000, pledgeable.get(*pledges_arr[0]));
-        assert_eq!(pledger_2, *pledges_arr[1]);
-        assert_eq!(2000, pledgeable.get(*pledges_arr[1]));
-        assert_eq!(pledger_3, *pledges_arr[2]);
-        assert_eq!(2500, pledgeable.get(*pledges_arr[2]));
+        assert_eq!(pledgers_arr.len(), 3);
+        assert_eq!(pledger_1, *pledgers_arr[0]);
+        assert_eq!(1000, pledgeable.get(*pledgers_arr[0]));
+        assert_eq!(pledger_2, *pledgers_arr[1]);
+        assert_eq!(2000, pledgeable.get(*pledgers_arr[1]));
+        assert_eq!(pledger_3, *pledgers_arr[2]);
+        assert_eq!(2500, pledgeable.get(*pledgers_arr[2]));
+    }
+
+    #[test]
+    fn test_get_pledgers_as_arr_many_pledgers() {
+        let mut pledgeable: TestingState = Default::default();
+
+        // set up 1000 pledgers
+        let mut pledgers: Array::<ContractAddress> = array![];
+        let mut i: felt252 = 1000;
+        while i != 0 {
+            let pledger: ContractAddress = i.try_into().unwrap();
+            let amount: u256 = i.into() * 100;
+            pledgeable.add(pledger, amount);
+            pledgers.append(pledger);
+            i -= 1;
+        };
+
+        let pledgers_arr: Array::<ContractAddress> = pledgeable.get_pledgers_as_arr();
+
+        assert_eq!(pledgers_arr.len(), pledgers.len());
+        
+        let mut i = 0;
+        while i < 1000 {
+            let expected_pledger: ContractAddress = *pledgers.at(i);
+            let actual_pledger: ContractAddress = *pledgers_arr.at(i);
+            assert_eq!(expected_pledger, actual_pledger);
+            i += 1;
+        }
     }
 
     #[test]
