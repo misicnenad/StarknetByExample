@@ -183,7 +183,7 @@ pub mod MockUpgrade {
             self.pledges.get(pledger)
         }
 
-        fn get_pledges(self: @ContractState) -> Array<(ContractAddress, u256)> {
+        fn get_pledges(self: @ContractState) -> Array<ContractAddress> {
             self.pledges.get_pledges_as_arr()
         }
 
@@ -280,7 +280,7 @@ pub mod MockUpgrade {
 
         fn _refund_all(ref self: ContractState, reason: ByteArray) {
             let mut pledges = self.pledges.get_pledges_as_arr();
-            while let Option::Some((pledger, _)) = pledges.pop_front() {
+            while let Option::Some(pledger) = pledges.pop_front() {
                 self._refund(pledger);
             };
             self.emit(Event::RefundedAll(RefundedAll { reason }));

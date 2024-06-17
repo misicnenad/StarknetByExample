@@ -6,22 +6,23 @@ pub trait IPledgeable<TContractState> {
     fn add(ref self: TContractState, pledger: ContractAddress, amount: u256);
     fn get(self: @TContractState, pledger: ContractAddress) -> u256;
     fn get_pledger_count(self: @TContractState) -> u32;
-    fn get_pledges_as_arr(self: @TContractState) -> Array<(ContractAddress, u256)>;
+    fn get_pledges_as_arr(self: @TContractState) -> Array<ContractAddress>;
     fn get_total(self: @TContractState) -> u256;
     fn remove(ref self: TContractState, pledger: ContractAddress) -> u256;
 }
 
 #[starknet::component]
 pub mod pledgeable_component {
+    use core::traits::IndexView;
     use core::array::ArrayTrait;
     use starknet::{ContractAddress};
     use core::num::traits::Zero;
+    use alexandria_storage::list::{List, ListTrait};
 
     #[storage]
     struct Storage {
-        index_to_pledger: LegacyMap<u32, ContractAddress>,
+        pledgers: List<ContractAddress>,
         pledger_to_amount: LegacyMap<ContractAddress, u256>,
-        pledger_count: u32,
         total_amount: u256,
     }
 
@@ -41,9 +42,8 @@ pub mod pledgeable_component {
             let old_amount: u256 = self.pledger_to_amount.read(pledger);
 
             if old_amount == 0 {
-                let index = self.pledger_count.read();
-                self.index_to_pledger.write(index, pledger);
-                self.pledger_count.write(index + 1);
+                let mut pledgers = self.pledgers.read();
+                pledgers.append(pledger).unwrap();
             }
 
             self.pledger_to_amount.write(pledger, old_amount + amount);
@@ -55,23 +55,12 @@ pub mod pledgeable_component {
         }
 
         fn get_pledger_count(self: @ComponentState<TContractState>) -> u32 {
-            self.pledger_count.read()
+            self.pledgers.read().len()
         }
 
-        fn get_pledges_as_arr(
-            self: @ComponentState<TContractState>
-        ) -> Array<(ContractAddress, u256)> {
-            let mut result = array![];
-
-            let mut index = self.pledger_count.read();
-            while index != 0 {
-                index -= 1;
-                let pledger = self.index_to_pledger.read(index);
-                let amount: u256 = self.pledger_to_amount.read(pledger);
-                result.append((pledger, amount));
-            };
-
-            result
+        fn get_pledges_as_arr(self: @ComponentState<TContractState>) -> Array<ContractAddress> {
+            let pledgers = self.pledgers.read();
+            pledgers.array().unwrap()
         }
 
         fn get_total(self: @ComponentState<TContractState>) -> u256 {
@@ -86,27 +75,30 @@ pub mod pledgeable_component {
                 return 0;
             }
 
-            let last_index = self.pledger_count.read() - 1;
+            let mut pledgers = self.pledgers.read();
+            assert(pledgers.len() != 0, Errors::INCONSISTENT_STATE);
 
-            // if there are other pledgers, we need to update our indices
-            if last_index != 0 {
-                let mut pledger_index = last_index;
+            let first_pledger = match pledgers.pop_front() {
+                Result::Ok(val) => val.unwrap(), // there was at least 1 list item
+                Result::Err(errs) => panic(errs)
+            };
+
+            // if we popped a different pledger, we must use it to overwrite
+            // the pledger we're trying to remove
+            if first_pledger != pledger {
+                assert(pledgers.len() != 0, Errors::INCONSISTENT_STATE);
+                let mut index = pledgers.len() - 1;
                 loop {
-                    if self.index_to_pledger.read(pledger_index) == pledger {
+                    if pledgers.get(index).unwrap().unwrap() == pledger {
+                        pledgers.set(index, first_pledger).unwrap();
                         break;
                     }
-                    assert(pledger_index > 0, Errors::INCONSISTENT_STATE);
-                    pledger_index -= 1;
+                    assert(index != 0, Errors::INCONSISTENT_STATE);
+                    index -= 1;
                 };
-
-                self.index_to_pledger.write(pledger_index, self.index_to_pledger.read(last_index));
             }
 
-            // last_index == new pledger count
-            self.pledger_count.write(last_index);
             self.pledger_to_amount.write(pledger, 0);
-            self.index_to_pledger.write(last_index, Zero::zero());
-
             self.total_amount.write(self.total_amount.read() - amount);
 
             amount
@@ -250,9 +242,12 @@ mod tests {
         let pledges_arr = pledgeable.get_pledges_as_arr();
 
         assert_eq!(pledges_arr.len(), 3);
-        assert_eq!((pledger_1, 1000), *pledges_arr[2]);
-        assert_eq!((pledger_2, 2000), *pledges_arr[1]);
-        assert_eq!((pledger_3, 2500), *pledges_arr[0]);
+        assert_eq!(pledger_1, *pledges_arr[0]);
+        assert_eq!(1000, pledgeable.get(*pledges_arr[0]));
+        assert_eq!(pledger_2, *pledges_arr[1]);
+        assert_eq!(2000, pledgeable.get(*pledges_arr[1]));
+        assert_eq!(pledger_3, *pledges_arr[2]);
+        assert_eq!(2500, pledgeable.get(*pledges_arr[2]));
     }
 
     #[test]
